@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Image Classifier</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 600px;
+            width: 100%;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+        
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        
+        .upload-area {
+            border: 3px dashed #667eea;
+            border-radius: 15px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-bottom: 20px;
+        }
+        
+        .upload-area:hover {
+            border-color: #764ba2;
+            background: #f8f9ff;
+        }
+        
+        .upload-area.dragover {
+            background: #f0f0ff;
+            border-color: #764ba2;
+        }
+        
+        #imageInput {
+            display: none;
+        }
+        
+        .upload-icon {
+            font-size: 48px;
+            margin-bottom: 10px;
+        }
+        
+        .upload-text {
+            color: #666;
+            font-size: 16px;
+        }
+        
+        #imagePreview {
+            max-width: 100%;
+            max-height: 300px;
+            border-radius: 10px;
+            margin: 20px 0;
+            display: none;
+        }
+        
+        #webcamContainer {
+            margin: 20px 0;
+            display: none;
+        }
+        
+        #webcam {
+            width: 100%;
+            border-radius: 10px;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        button {
+            flex: 1;
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: 600;
+        }
+        
+        button:hover {
+            background: #764ba2;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        #results {
+            margin-top: 30px;
+            display: none;
+        }
+        
+        .result-item {
+            background: #f8f9ff;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .result-label {
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .result-bar {
+            flex: 1;
+            height: 8px;
+            background: #e0e0e0;
+            border-radius: 4px;
+            margin: 0 15px;
+            overflow: hidden;
+        }
+        
+        .result-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            border-radius: 4px;
+            transition: width 0.5s ease;
+        }
+        
+        .result-percentage {
+            font-weight: 600;
+            color: #667eea;
+            min-width: 50px;
+            text-align: right;
+        }
+        
+        .loading {
+            text-align: center;
+            color: #667eea;
+            margin: 20px 0;
+            display: none;
+        }
+        
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🌲 Wilding Pine Detector</h1>
+        <p class="subtitle">Upload an image to identify wilding pines vs other vegetation</p>
+        
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>Loading model...</p>
+        </div>
+        
+        <div class="upload-area" id="uploadArea">
+            <div class="upload-icon">📸</div>
+            <div class="upload-text">Click to upload or drag and drop an image</div>
+            <input type="file" id="imageInput" accept="image/*">
+        </div>
+        
+        <img id="imagePreview" alt="Preview">
+        
+        <div class="button-group">
+            <button id="webcamBtn">Use Webcam</button>
+            <button id="predictBtn" style="display: none;">Predict</button>
+        </div>
+        
+        <div id="webcamContainer"></div>
+        
+        <div id="results">
+            <h2 style="margin-bottom: 15px; color: #333;">Results:</h2>
+            <div id="predictionsList"></div>
+        </div>
+    </div>
+
+    <script>
+        const URL = "./";
+        let model, webcam, maxPredictions;
+        let isWebcamActive = false;
+
+        async function init() {
+            document.getElementById('loading').style.display = 'block';
+            
+            const modelURL = URL + "model.json";
+            const metadataURL = URL + "metadata.json";
+
+            try {
+                model = await tmImage.load(modelURL, metadataURL);
+                maxPredictions = model.getTotalClasses();
+                document.getElementById('loading').style.display = 'none';
+                console.log("Model loaded successfully!");
+            } catch (error) {
+                document.getElementById('loading').innerHTML = '<p style="color: red;">Error loading model. Make sure model.json, weights.bin, and metadata.json are in the same folder!</p>';
+                console.error("Error loading model:", error);
+            }
+        }
+
+        // Upload area handlers
+        const uploadArea = document.getElementById('uploadArea');
+        const imageInput = document.getElementById('imageInput');
+        const imagePreview = document.getElementById('imagePreview');
+
+        uploadArea.addEventListener('click', () => imageInput.click());
+
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            const file = e.dataTransfer.files[0];
+            if (file && file.type.startsWith('image/')) {
+                handleImageUpload(file);
+            }
+        });
+
+        imageInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                handleImageUpload(file);
+            }
+        });
+
+        function handleImageUpload(file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                imagePreview.src = e.target.result;
+                imagePreview.style.display = 'block';
+                stopWebcam();
+                predictImage(imagePreview);
+            };
+            reader.readAsDataURL(file);
+        }
+
+        async function predictImage(image) {
+            if (!model) {
+                alert("Model is still loading, please wait...");
+                return;
+            }
+
+            const prediction = await model.predict(image);
+            displayResults(prediction);
+        }
+
+        // Webcam functionality
+        document.getElementById('webcamBtn').addEventListener('click', async () => {
+            if (!isWebcamActive) {
+                await setupWebcam();
+            } else {
+                stopWebcam();
+            }
+        });
+
+        async function setupWebcam() {
+            const flip = true;
+            webcam = new tmImage.Webcam(320, 320, flip);
+            await webcam.setup();
+            await webcam.play();
+            
+            const webcamContainer = document.getElementById('webcamContainer');
+            webcamContainer.innerHTML = '';
+            webcamContainer.appendChild(webcam.canvas);
+            webcamContainer.style.display = 'block';
+            
+            isWebcamActive = true;
+            document.getElementById('webcamBtn').textContent = 'Stop Webcam';
+            document.getElementById('imagePreview').style.display = 'none';
+            
+            window.requestAnimationFrame(loopWebcam);
+        }
+
+        async function loopWebcam() {
+            if (isWebcamActive) {
+                webcam.update();
+                await predictImage(webcam.canvas);
+                window.requestAnimationFrame(loopWebcam);
+            }
+        }
+
+        function stopWebcam() {
+            if (webcam) {
+                webcam.stop();
+                isWebcamActive = false;
+                document.getElementById('webcamContainer').style.display = 'none';
+                document.getElementById('webcamBtn').textContent = 'Use Webcam';
+            }
+        }
+
+        function displayResults(predictions) {
+            const resultsDiv = document.getElementById('results');
+            const predictionsList = document.getElementById('predictionsList');
+            
+            resultsDiv.style.display = 'block';
+            predictionsList.innerHTML = '';
+            
+            predictions.sort((a, b) => b.probability - a.probability);
+            
+            predictions.forEach(pred => {
+                const percentage = (pred.probability * 100).toFixed(1);
+                const resultItem = document.createElement('div');
+                resultItem.className = 'result-item';
+                resultItem.innerHTML = `
+                    <span class="result-label">${pred.className}</span>
+                    <div class="result-bar">
+                        <div class="result-fill" style="width: ${percentage}%"></div>
+                    </div>
+                    <span class="result-percentage">${percentage}%</span>
+                `;
+                predictionsList.appendChild(resultItem);
+            });
+        }
+
+        // Initialize on page load
+        init();
+    </script>
+</body>
+</html>
